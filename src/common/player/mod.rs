@@ -1,4 +1,3 @@
-
 use rand::Rng;
 mod common;
 
