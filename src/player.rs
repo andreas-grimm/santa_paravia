@@ -358,8 +358,10 @@ impl Player {
     }
 
 
+    /**
+    Function to store land gained from attacks.
+    */
     pub fn gain_land(mut self, gained_land :i32) -> Player {
-        self.land = self.land + gained_land;
         self.land_gained_from_attacks = self.land_gained_from_attacks + gained_land;
         return self;
     }
@@ -377,7 +379,7 @@ impl Player {
         // we are using 8-bit random numbers
         let my_random :f32 = (rand::thread_rng().gen_range(0.. 32767) as f32) / 32767.0;
 
-        // If you think this C code is ugly, you should see the original BASIC.
+        // If you think this Rust code is ugly, you should see the original BASIC.
         let mut worked_land :f32 = self.land as f32;
 
         // available work force = number of serfs - number of serfs needed for mills (1 serf per mill) times 100
@@ -714,6 +716,15 @@ impl Player {
         }
 
         return title;
+    }
+
+    /**
+    Consolidate the gained land:
+    */
+    pub fn consolidate(mut self) -> Player {
+        self.land = self.land + self.land_gained_from_attacks;
+        self.land_gained_from_attacks = 0;
+        return self;
     }
 
     pub fn get_title_num(self) -> i32 {

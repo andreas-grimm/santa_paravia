@@ -13,37 +13,6 @@
   Side Effects:N/A                                                              
 
   This code is copyrighted and has limited warranties.
-
-  **
-  **                                                                           
-  ** Santa Paravia & Fiumaccio. Translated from the original TRS-80 BASIC 
-  **      
-  ** source code into C by Thomas Knox <tknox@mac.com>.
-  **                         
-  ** 
-  **                                                                           
-  ** Original program (C) 1979 by George Blank
-  **                                  
-  ** <gwblank@postoffice.worldnet.att.net>
-  **                                      
-  **
-
-  Copyright (C) 2000 Thomas Knox                                                  
-  Portions Copyright (C) 1979 by George Blank, used with permission.              
-  This program is free software; you can redistribute it and/or                   
-  modify it under the terms of the GNU General Public License                     
-  as published by the Free Software Foundation; either version 2                  
-  of the License, or (at your option) any later version.                          
-  This program is distributed in the hope that it will be useful,                 
-  but WITHOUT ANY WARRANTY; without even the implied warranty of                  
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the                    
-  GNU General Public License for more details.                                    
-  You should have received a copy of the GNU General Public License               
-  along with this program; if not, write to the Free Software                     
-  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.      
-  Thomas Knox                                                                     
-  tknox@mac.com  
-
 */
 mod player;
 use crate::player::Player;
@@ -163,11 +132,13 @@ fn play_game(mut players: Vec<Player>) {
     let mut all_dead = true;
 
     loop {
+        let mut other_players: Vec<Player> = players.clone();
+
         for counter in 0..players.len() {
             let mut player= players[counter].clone();
 
             if player.clone().dead() == false {
-                player = new_turn(player, players.clone());
+                (player, other_players) = new_turn(player, other_players);
                 all_dead = false;
             }
 
@@ -181,9 +152,15 @@ fn play_game(mut players: Vec<Player>) {
 
         }
 
+        for counter in 0..players.len() {
+            let mut player= players[counter].clone();
+
+            players[counter] = player;
+        }
+
         if all_dead == true {
-            println!("The game has ended.\n");
-            break;
+        println!("The game has ended.\n");
+        break;
         }
     }
 }
@@ -207,7 +184,7 @@ Step 2: Part (a): The player is able to buy and sell grain, and also to buy and 
 Step 3: Verify the military defense capabilities. If the player's land is not protected enough, the
         player will be attacked and property will be taken.
  */
-fn new_turn(mut player: Player, mut players: Vec<Player>) -> Player {
+fn new_turn(mut player: Player, mut players: Vec<Player>) -> (Player, Vec<Player>) {
     // Step 1: Calculate harvest and loss of grain due to rats
     player = player.harvest_land_and_grain_prices();
     player = player.rat_loss();
@@ -228,7 +205,7 @@ fn new_turn(mut player: Player, mut players: Vec<Player>) -> Player {
     // Step 6: check for the bankruptcy or end of life
     player = check_survival_or_win(player);
 
-    return player;
+    return (player, players);
 }
 
 
@@ -387,6 +364,81 @@ fn buy_and_sell_grain(mut player: Player) -> Player {
 
 
 /**
+Private function "Release Grain"
+
+Step 2(b) in the game flow
+
+This function takes a player and returns the modified version of the player.
+
+This function allows the player to distribute grain to the population. Based on the release amount the
+local population will grow or shrink, a large donation of grain will attract outsiders into the country.
+
+There are limits on the amount of grain that the player can distribute: a minimum of 20% must be distributed,
+also 20% must remain in storage.
+ */
+fn release_grain(mut player: Player) -> Player {
+    let mut ok :bool = false;
+    let mut amount: f32 = 0.0;
+
+    while ok == false {
+        println!("\nHow much grain will you release for consumption?");
+        print!("1 = Minimum ({:.2}), 2 = Maximum({:.2}), or enter a value: ",player.clone().get_minimum_grain(), player.clone().get_maximum_grain());
+        let answer: String = read!("{}\n");
+
+        amount = answer.parse::<f32>().unwrap();
+
+        let too_little :bool;
+        let too_much: bool;
+
+        (too_little, too_much) = player.clone().release_grain_check(amount);
+
+        // Are we being a Scrooge?
+        if too_little {
+            println!("You must release at least 20 % of your reserves.");
+        } else if too_much {
+            // Whoa. Slow down here son.
+            println!("You must keep at least 20%.");
+        } else {
+            ok = true;
+        }
+    }
+
+    player = player.process_released_grain(amount);
+
+    // now let's check the results of our actions
+    println!("\nYou have a total of {} serfs in the city", player.clone().get_serfs());
+    println!("\t{} serfs were born this year", player.clone().get_born_serfs());
+    println!("\t{} serfs died this year", player.clone().get_dead_serfs());
+
+    if player.clone().get_immigrated_serfs() > 0 {
+        println!("\t{} serfs immigrated into your city", player.clone().get_immigrated_serfs());
+    }
+
+    if player.clone().get_fleeing_serfs() > 0 {
+        println!("\t{} serfs flee harsh justice", player.clone().get_immigrated_serfs());
+    }
+
+    if player.clone().get_market_revenue() > 0 {
+        println!("\nYour markets made a win of {} florint", player.clone().get_market_revenue());
+    }
+
+    if player.clone().get_mill_revenue() > 0 {
+        println!("Your mills made a win of {} florint", player.clone().get_mill_revenue());
+    }
+
+    if player.clone().get_soldier_pay() > 0 {
+        println!("You paid your soldiers {} florint", player.clone().get_soldier_pay());
+    }
+
+    println!("(Press ENTER to continue)");
+    let _ :String = read!("{}\n");
+    let _ = clear();
+
+    return player;
+}
+
+
+/**
 Private function "Verify Defense"
 
 Step 3 in the game flow
@@ -415,7 +467,6 @@ fn verify_defense(mut player: Player, mut players: Vec<Player>) -> (Player, Vec<
 
             if attacked == false {
                 //I cannot attack myself
-                //TODO Thing about civil unrest... - the current player loses land, but the receiving of the land is not completely implemented
                 if opponent.clone().get_name() != player.clone().get_name() {
                     if opponent.clone().get_soldiers() > (player.clone().get_soldiers() as f32 * 2.4) as i32 {
                         (player, opponent, land_taken, dead_soldiers) = player.clone().attacked_by_neighbor(opponent);
@@ -617,68 +668,6 @@ fn show_stats(players: Vec<Player>) {
 }
 
 
-fn release_grain(mut player: Player) -> Player {
-    let mut ok :bool = false;
-    let mut amount: f32 = 0.0;
-
-    while ok == false {
-        println!("\nHow much grain will you release for consumption?");
-        print!("1 = Minimum ({:.2}), 2 = Maximum({:.2}), or enter a value: ",player.clone().get_minimum_grain(), player.clone().get_maximum_grain());
-        let answer: String = read!("{}\n");
-
-        amount = answer.parse::<f32>().unwrap();
-
-        let too_little :bool;
-        let too_much: bool;
-
-        (too_little, too_much) = player.clone().release_grain_check(amount);
-
-        // Are we being a Scrooge?
-        if too_little {
-            println!("You must release at least 20 % of your reserves.");
-        } else if too_much {
-        // Whoa. Slow down here son.
-            println!("You must keep at least 20%.");
-        } else {
-            ok = true;
-        }
-    }
-
-    player = player.process_released_grain(amount);
-
-    // now let's check the results of our actions
-    println!("\nYou have a total of {} serfs in the city", player.clone().get_serfs());
-    println!("\t{} serfs were born this year", player.clone().get_born_serfs());
-    println!("\t{} serfs died this year", player.clone().get_dead_serfs());
-
-    if player.clone().get_immigrated_serfs() > 0 {
-       println!("\t{} serfs immigrated into your city", player.clone().get_immigrated_serfs());
-    }
-
-    if player.clone().get_fleeing_serfs() > 0 {
-       println!("\t{} serfs flee harsh justice", player.clone().get_immigrated_serfs());
-    }
-
-    if player.clone().get_market_revenue() > 0 {
-       println!("\nYour markets made a win of {} florint", player.clone().get_market_revenue());
-    }
-
-    if player.clone().get_mill_revenue() > 0 {
-       println!("Your mills made a win of {} florint", player.clone().get_mill_revenue());
-    }
-
-    if player.clone().get_soldier_pay() > 0 {
-       println!("You paid your soldiers {} florint", player.clone().get_soldier_pay());
-    }
-
-    println!("(Press ENTER to continue)");
-    let _ :String = read!("{}\n");
-    let _ = clear();
-
-    return player;
-}
-
-
 /**
 Private function "Check Survival or Win"
 
@@ -724,6 +713,11 @@ fn check_survival_or_win(mut player: Player) -> Player {
     return player;
 }
 
+/**
+Private function "Rules"
+
+This function presents the rules of the game to the player.
+ */
 fn rules() {
     println!("Santa Paravia and Fiumaccio\n");
     println!("You are the ruler of a 15th century Italian city state.\n");
