@@ -41,7 +41,6 @@ pub struct Player {
     title_num :usize,
     transplanted_serfs :i32,
     treasury :f32,
-    which_player :i32,
     year :i32,
     year_of_death :i32,
     /* String variable parts */
@@ -56,8 +55,7 @@ pub struct Player {
     is_bankrupt :bool,
     is_dead :bool,
     i_won :bool,
-    male :bool,
-    new_title :usize
+    male :bool
 }
 
 
@@ -101,7 +99,6 @@ impl Player {
             title_num : 0,
             transplanted_serfs : 0,
             treasury : 1000.0,
-            which_player : 0,
             year : 1400,
             year_of_death : 0,
             name : String::from(""),
@@ -114,18 +111,18 @@ impl Player {
             is_bankrupt : false,
             is_dead : false,
             i_won : false,
-            male : true,
-            new_title : 0
+            male : true
         };
 
         return player;
     }
 
 
-    pub fn init(mut self, player_name: String, player_gender: bool, city_name: String) -> Player {
+    pub fn init(mut self, player_name: String, player_gender: bool, city_name: String, difficulty: i32) -> Player {
         self.city = city_name;
         self.name = player_name;
         self.male = player_gender;
+        self.difficulty = difficulty;
 
         return self;
     }
@@ -168,8 +165,8 @@ impl Player {
     }
 
     fn add_revenue(mut self) -> Player {
-        self.treasury = self.treasury + (self.justice_revenue + self.customs_duty_revenue) ;
-        self.treasury = self.treasury + (self.income_tax_revenue + self.sales_tax_revenue) as f32;
+        self.treasury = self.treasury + self.justice_revenue + self.customs_duty_revenue;
+        self.treasury = self.treasury + self.income_tax_revenue + self.sales_tax_revenue;
 
         if self.treasury < 0.0 {
            self.treasury *= 1.5;
@@ -223,9 +220,9 @@ impl Player {
     }
 
     pub fn buy_grain(mut self, amount:f32) -> (Player, bool) {
-        let cost = (amount as f32 * self.grain_price / 1000.0);
-        if (cost > self.treasury) {
-            return (self, false);
+        let cost = amount * self.grain_price / 1000.0;
+        if cost > self.treasury {
+           return (self, false);
         }
         self.treasury = self.treasury - cost;
         self.grain_reserve += amount;
@@ -235,8 +232,8 @@ impl Player {
 
 
     pub fn buy_land(mut self, amount:i32) -> (Player, bool) {
-        let cost = (amount * self.land_price);
-        if (cost > self.treasury as i32) {
+        let cost = amount * self.land_price;
+        if cost > self.treasury as i32 {
             return (self, false);
         }
 
@@ -298,7 +295,7 @@ impl Player {
         total += common::limit10(self.soldiers, 50);
         total += common::limit10(self.clergy, 10);
         total += common::limit10(self.serfs, 2000);
-        total += common::limit10((self.public_works) as i32 * 100, 500);
+        total += common::limit10(self.public_works as i32 * 100, 500);
 
         self.title = (total / self.difficulty - self.justice) as usize;
 
@@ -377,7 +374,7 @@ impl Player {
         }
 
         // Generate an offset for use in later int -> float conversions.
-        // we are using 8 bit random numbers
+        // we are using 8-bit random numbers
         let my_random :f32 = (rand::thread_rng().gen_range(0.. 32767) as f32) / 32767.0;
 
         // If you think this C code is ugly, you should see the original BASIC.
@@ -506,7 +503,7 @@ impl Player {
         }
 
         let grain_demand = self.grain_demand;
-        let mut grain_deficit = 0.0;
+        let mut grain_deficit;
         if released_grain < (grain_demand - 1.0) {
             grain_deficit = (grain_demand - released_grain) / (grain_demand * 100.0 - 9.0);
 
@@ -518,13 +515,12 @@ impl Player {
 
             if grain_deficit < 0.0 {
                 unhappiness_factor = 0.0;
-                grain_deficit = 0.0;
             }
 
             self = self.serfs_procreating(3.0);
             self = self.serfs_decomposing(unhappiness_factor + 8.0);
         } else {
-            self = self.serfs_procreating(7.0);
+            self = self.serfs_procreating(7.0 * demand_satisfaction);
             self = self.serfs_decomposing(3.0);
 
             if (self.customs_duty + self.sales_tax) < 35.0 {
@@ -537,14 +533,14 @@ impl Player {
                 self.clergy += rand::thread_rng().gen_range(0.. 3);
             }
 
-            // overachieving anual results: 30% extra released
-            if released_grain > (self.grain_demand as f32) * 1.3 {
+            // overachieving annual results: 30% extra released
+            if released_grain > self.grain_demand * 1.3 {
                 let population_density = (self.serfs as f32) / 1000.0;
                 let transplanting_serfs :i32 = ((released_grain - (self.grain_demand)) /
                     (self.grain_demand * 10.0) *
                     population_density) as i32 *
                     (rand::thread_rng().gen_range(0.. 25)) + (rand::thread_rng().gen_range(0.. 40));
-                self.transplanted_serfs = transplanting_serfs as i32;
+                self.transplanted_serfs = transplanting_serfs;
                 self.serfs = self.serfs + self.transplanted_serfs;
 
                 let mut immigration_pull = transplanting_serfs;
@@ -562,7 +558,7 @@ impl Player {
 
         if self.justice > 2 {
             self.justice_revenue = (self.serfs / 100 * (self.justice - 2) * (self.justice - 2)) as f32;
-            self.justice_revenue = (rand::thread_rng().gen_range(0..  (self.justice_revenue as i32))) as f32;
+            self.justice_revenue = rand::thread_rng().gen_range(0..  (self.justice_revenue as i32)) as f32;
             self.serfs = self.serfs - self.justice_revenue as i32;
             self.fleeing_serfs = self.justice_revenue as i32;
         }
@@ -617,7 +613,6 @@ impl Player {
             // Are we being a Scrooge?
             too_little = true;
         } else if (released_grain - 1.0) > self.clone().get_maximum_grain() {
-            // Whoa. Slow down there son.
             too_much = true;
         }
 
@@ -695,11 +690,11 @@ impl Player {
     }
 
     pub fn get_maximum_grain(self) -> f32 {
-        return self.grain_reserve as f32 - self.clone().get_minimum_grain();
+        return self.grain_reserve - self.clone().get_minimum_grain();
     }
 
     pub fn get_minimum_grain(self) -> f32 {
-        return self.grain_reserve as f32 / 5.0;
+        return self.grain_reserve / 5.0;
     }
 
     pub fn get_title(self) -> String {
@@ -721,7 +716,7 @@ impl Player {
         return title;
     }
 
-    pub fn get_title_num(mut self) -> i32 {
+    pub fn get_title_num(self) -> i32 {
         return self.title_num as i32;
     }
 
@@ -739,6 +734,18 @@ impl Player {
 
     pub fn i_won(self) -> bool {
         return self.i_won;
+    }
+
+    pub fn get_nobles(self) -> i32 {
+        return self.nobles;
+    }
+
+    pub fn get_clergy(self) -> i32 {
+        return self.clergy;
+    }
+
+    pub fn get_merchants(self) -> i32 {
+        return self.merchants;
     }
 
     pub fn get_rats(self) -> i32 {
