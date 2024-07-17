@@ -155,6 +155,8 @@ fn play_game(mut players: Vec<Player>) {
         for counter in 0..players.len() {
             let mut player= players[counter].clone();
 
+            player = player.consolidate();
+
             players[counter] = player;
         }
 

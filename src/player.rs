@@ -303,10 +303,6 @@ impl Player {
             self.title = 7;
         }
 
-        if self.title < 0 {
-            self.title = 0;
-        }
-
         if self.title > self.old_title {
             self.title = self.old_title + 1;
             self.old_title = self.title;
