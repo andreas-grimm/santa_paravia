@@ -15,7 +15,6 @@
   This code is copyrighted and has limited warranties.
 */
 mod text;
-mod curses;
 mod common;
 
 use std::env;
@@ -26,10 +25,6 @@ fn main() {
 
   if args.len() > 1 {
     query = args[1].clone();
-  }
-
-  if query == "-curses" {
-    curses::santa_paravia_module::santa_paravia_curses();
   }
 
   // import line: file::module::function
