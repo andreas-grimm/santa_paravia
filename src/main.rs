@@ -42,10 +42,15 @@ fn main() {
         rules();
     }
 
+    let num_of_players: u32;
+
     print!("How many people want to play (1 to 6)? ");
     answer = read!("{}\n");
-
-    let num_of_players = answer.chars().next().expect("Incorrect input").to_digit(10).unwrap_or(0);
+    if answer.is_empty() == false {
+        num_of_players = answer.chars().next().expect("Incorrect input").to_digit(10).unwrap_or(0);
+    } else {
+        num_of_players = 0;
+    }
 
     if (num_of_players < 1) || (num_of_players > 6) {
         println!("Thanks for playing.\n");
@@ -627,7 +632,11 @@ fn make_purchases(mut player: Player, players: Vec<Player>) -> Player {
         print!("\nTo continue, enter q. To compare standings, enter 6: ");
 
         answer = read!("{}\n");
-        answer_char = answer.chars().next().unwrap();
+        if answer.is_empty() == false {
+            answer_char = answer.chars().next().unwrap();
+        } else {
+            answer_char = 'q';
+        }
 
         if answer_char == '1' {
             player = player.buy_market();
